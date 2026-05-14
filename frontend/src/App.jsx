@@ -69,7 +69,7 @@ function App() {
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>Wippy - Gestor de Campos</h1>
+        <h1>Wippy &  H2Hydra - Gestor de campos </h1>
         <p>Gestiona tus campos y visualiza el calendario de optimalidad de aplicación de urea</p>
       </header>
 
