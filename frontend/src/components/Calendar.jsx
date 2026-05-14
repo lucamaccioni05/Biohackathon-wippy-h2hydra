@@ -109,9 +109,6 @@ function Calendar({ field }) {
         })}
       </div>
 
-      <p className="calendar-note">
-        Nota: Vista de 3 semanas desde hoy. Los colores son estimados y se actualizaran con datos meteorologicos en proximas versiones.
-      </p>
     </div>
   )
 }
