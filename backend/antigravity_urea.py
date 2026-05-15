@@ -72,11 +72,11 @@ class StandardUreaModel:
         Enforces the 'Instant NO' List.
         Returns (is_blocked, reason_message)
         """
-        if wind > 25:
-            return True, "BLOCK: Wind > 25km/h (High Volatilization/Drift)"
-        if rainfall > 60:
+        if wind > 35:
+            return True, "BLOCK: Wind > 35km/h (Physical Drift)"
+        if rainfall > 80:
             return True, "BLOCK: Rain > 60mm (Washout/Leaching Risk)"
-        if rainfall < 5:
+        if 0.1 <= rainfall < 5:
             return True, "BLOCK: Rain < 5mm (Not enough water)"
         if temp > 28:
             return True, "BLOCK: Temp > 28°C (Uncontrollable Loss)"
@@ -85,31 +85,64 @@ class StandardUreaModel:
 
     def calculate_volatilization_risk(self, temp, wind, humidity):
         """
-        Calculates the volatilization risk flux.
-        Restructured: Wind acts as a synergistic multiplier for Temperature.
+        Calculates the volatilization risk score based on climate synergies.
+        Temperature acts as the 'Engine' (driving hydrolysis), while Wind acts
+        as the 'Accelerator' (stripping the boundary layer geometrically).
         """
-        # 1. HUMIDITY NORMALIZATION (Inverse linear remains as requested)
+        # 1. THE ENGINE: Temperature drives the base biochemical rate
+        # Higher temperatures equal faster urease activity.
+        temperature_weight = 0.8
+        base_temp_risk = max(0, temp) * temperature_weight
+
+        # 2. THE ACCELERATOR: Wind physically sweeps the NH3 boundary layer
+        # We use a multiplier so that at 0 wind, the temperature still causes risk,
+        # but as wind increases, it multiplies the temperature's effect.
+
+        # Phase A: Calm / Light Air (0 to 10 km/h)
+        # The boundary layer is mostly stagnant. Risk ticks up very slowly.
+        if wind <= 10:
+            wind_multiplier = 1.0 + (wind * 0.01)  # Ends at 1.1x multiplier
+
+        # Phase B: The Geometric Skyrocket (10 to 25 km/h)
+        # Wind begins actively stripping the layer. Gradient steepens rapidly.
+        elif 10 < wind <= 25:
+            # Calculate progress through this 15 km/h hazard zone (0.0 to 1.0)
+            progress = (wind - 10) / 15.0
+            # Squaring the progress creates the geometric spike you observed
+            # Multiplier jumps from 1.1x up to 2.5x
+            wind_multiplier = 1.1 + 1.4 * (progress ** 2)
+
+        # Phase C: The "It's All Ruined" Bend (25 to 35 km/h)
+        # The physical stripping of air catches up to the chemical production rate.
+        # Curve flattens out as it approaches the maximum limit.
+        elif 25 < wind <= 35:
+            progress = (wind - 25) / 10.0
+            # Linear finish to the absolute maximum multiplier
+            wind_multiplier = 2.5 + 0.5 * progress  # Ends at 3.0x multiplier
+
+        # Phase D: The Plateau (35+ km/h)
+        # Gale force. Gas is removed at maximum efficiency. Purely limited by hydrolysis now.
+        else:
+            wind_multiplier = 3.0
+
+        # 3. CLIMATE SYNERGY
+        climate_impact = base_temp_risk * wind_multiplier
+
+        # 4. HUMIDITY NORMALIZATION (Dryness as an additive vulnerability)
         norm_h = humidity / 100.0 if humidity > 1.0 else humidity
         norm_h = max(min(norm_h, 1.0), 0.05)
         dryness_factor = 1.0 - norm_h
-
-        # 2. CLIMATE SYNERGY (Geometric Relationship)
-        # We treat Temperature as the 'Engine' and Wind as the 'Accelerator'.
-        # A base wind factor of 1.0 ensures risk doesn't drop to zero on calm days.
-        wind_multiplier = 1.0 + (wind * 0.05)  # Slight scaling to prevent runaway spikes
-        climate_impact = (temp * 0.50) * wind_multiplier
-
-        # 3. WEIGHTED SCORING
-        # Dryness remains an additive 'Vulnerability' factor.
         dry_impact = dryness_factor * 20.0
 
+        # 5. WEIGHTED SCORING
         base_risk = climate_impact + dry_impact
 
-        # 4. CHEMICAL CATALYST
+        # 6. CHEMICAL CATALYST
+        # Alkaline soils lack the buffering capacity to absorb the hydrolysis pH spike
         if self.asset.ph > 7.5:
             base_risk *= 1.25
 
-        return base_risk * 0.5
+        return base_risk
 
     def calculate_incorporation_score(self, rainfall):
             """
@@ -147,7 +180,8 @@ class StandardUreaModel:
             return 0.1
 
     def calculate_leaching_risk(self, rainfall):
-        return (rainfall - 35) / 10.0 if rainfall > 35 else 0.0
+        leaching_weight = 12
+        return (rainfall - 35) / (10.0 * leaching_weight) if rainfall > 35 else 0.0
 
 class OptimizationEngine:
     def __init__(self, model: StandardUreaModel):
@@ -173,10 +207,8 @@ class OptimizationEngine:
             if is_blocked:
                 viability = 0.0
                 status = reason
-                vol_risk = self.model.calculate_volatilization_risk(
-                    row['Temperature'], row['Wind_Speed'], row['Humidity']
-                )
-                leach_risk = self.model.calculate_leaching_risk(row['Rainfall_mm'])
+                vol_risk = 0.0 # Set risks to 0 if blocked for consistent plotting
+                leach_risk = 0.0
                 print(f"BLOCKED: {reason}")
             else:
                 # 2. PROCEED WITH MECHANISTIC SCORING
@@ -243,10 +275,10 @@ def main():
     dates = [base_date + timedelta(days=i) for i in range(5)]
     mock_forecast = {
         'Date': dates,
-        'Temperature': [22, 15, 28, 18, 25],  # Celsius
-        'Wind_Speed': [15, 0,  25, 10, 20],   # km/h (0 for ideal comparison)
-        'Humidity': [60, 50, 40, 70, 50],     # %
-        'Rainfall_mm': [0, 15, 2,  40, 5]     # mm (20mm is ideal)
+        'Temperature': [8, 10, 15, 20, 28],   #Celsius, 10° optimal
+        'Wind_Speed': [5, 7, 10, 30, 6],      #km/h , 0 is optimal
+        'Humidity': [50, 40, 85, 30, 70],     # %, 60 is optimal
+        'Rainfall_mm': [23, 28, 12, 40, 25]   # mm, 20 is optimal
     }
 
     stream_manager.load_forecast(mock_forecast)
@@ -309,3 +341,88 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+import ipywidgets as widgets
+from IPython.display import display, clear_output
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+
+def main_interactive(temp, wind, humidity, rainfall):
+    clear_output(wait=True)
+    print(f"--- Interactive Urea Application Viability ---")
+    print(f"Inputs: Temp={temp}°C, Wind={wind}km/h, Humidity={humidity}%, Rainfall={rainfall}mm")
+
+    # 1. Initialize the Field (PhysicalAsset)
+    field = PhysicalAsset()
+    # Set pH to reflect the high pH scenario from the non-interactive main
+    field.sync_sensors({'ph': 7.6})
+
+    # 2. Manage Data Streams - Create a mock forecast for a single day
+    stream_manager = DataStreamManager()
+    mock_forecast = {
+        'Date': [datetime.now().date()],
+        'Temperature': [temp],
+        'Wind_Speed': [wind],
+        'Humidity': [humidity],
+        'Rainfall_mm': [rainfall]
+    }
+    stream_manager.load_forecast(mock_forecast)
+
+    # 3. Model & Optimize
+    urea_model = StandardUreaModel(field)
+    optimizer = OptimizationEngine(urea_model)
+
+    results_df = optimizer.get_viability_index(stream_manager.forecast_df)
+
+    # Extract results for the single day
+    viability = results_df.iloc[0]['Viability_%']
+    vol_risk = results_df.iloc[0]['Volatilization_Risk']
+    leach_risk = results_df.iloc[0]['Leaching_Risk']
+    status = results_df.iloc[0]['Status']
+
+    print(f"Viability: {viability:.1f}%")
+    print(f"Status: {status}")
+    print(f"Volatilization Risk: {vol_risk:.2f}")
+    print(f"Leaching Risk: {leach_risk:.2f}")
+
+    # Plotting the scores
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6)) # Two subplots
+
+    # Subplot 1: Viability and Volatilization Risk
+    metrics1 = ['Viability', 'Volatilization Risk']
+    values1 = [viability, vol_risk]
+    colors1 = ['#2ca02c', '#ff7f0e']
+    ax1.bar(metrics1, values1, color=colors1)
+    ax1.set_ylabel('Score / Risk Value')
+    ax1.set_title('Urea Application Viability & Volatilization Risk')
+    ax1.set_ylim(0, 100) # Viability is 0-100%, Volatilization Risk can also go high
+    ax1.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Subplot 2: Leaching Risk
+    metrics2 = ['Leaching Risk']
+    values2 = [leach_risk]
+    colors2 = ['#d62728']
+    ax2.bar(metrics2, values2, color=colors2)
+    ax2.set_ylabel('Risk Value')
+    ax2.set_title('Leaching Risk')
+    ax2.set_ylim(0, max(leach_risk * 1.2, 0.4)) # Set a dynamic y-limit for leaching risk, with a min of 0.4 to show small values
+    ax2.grid(axis='y', linestyle='--', alpha=0.7)
+
+
+
+"""Now, let's create the interactive sliders to control the inputs and visualize the results."""
+
+# Create interactive sliders
+temp_slider = widgets.IntSlider(min=0, max=40, step=1, value=15, description='Temperature (°C):')
+wind_slider = widgets.IntSlider(min=0, max=50, step=1, value=10, description='Wind Speed (km/h):')
+humidity_slider = widgets.IntSlider(min=0, max=100, step=5, value=60, description='Humidity (%):')
+rainfall_slider = widgets.IntSlider(min=0, max=100, step=1, value=20, description='Rainfall (mm):')
+
+# Link sliders to the interactive function
+interactive_plot = widgets.interactive(main_interactive,
+                                       temp=temp_slider,
+                                       wind=wind_slider,
+                                       humidity=humidity_slider,
+                                       rainfall=rainfall_slider)
+
+# Display the interactive plot

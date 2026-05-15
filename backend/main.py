@@ -189,6 +189,12 @@ class ApplicationRecord(ApplicationCreate):
     id: int
     field_id: int
     recorded_at: str
+
+class SimulationPayload(BaseModel):
+    temperature: float
+    humidity: float
+    wind_speed: float
+    rainfall: float
 default_field_id = 1
 fields_db = {
     default_field_id: Field(
@@ -359,7 +365,7 @@ def get_field_current_score(field_id: int):
             res_all = engine.get_viability_index(df_all)
             res_all["Hour"] = df_all["Hour"]
             max_v = res_all["Viability_%"].max()
-            if max_v > 0:
+            if max_v >= 0.5:
                 best_row = res_all[res_all["Viability_%"] == max_v].iloc[0]
                 best_hour = best_row["Hour"]
                 best_viability = float(max_v)
@@ -457,7 +463,7 @@ def get_field_forecast(field_id: int):
         best_hours = {}
         for d_str, group in results_all_df.groupby("Date"):
             max_viability = group["Viability_%"].max()
-            if max_viability > 0:
+            if max_viability >= 0.5:
                 best_row = group[group["Viability_%"] == max_viability].iloc[0]
                 best_hours[d_str] = {"best_hour": best_row["Hour"], "best_viability": float(max_viability)}
             else:
@@ -530,4 +536,39 @@ def get_applications(field_id: int):
 @app.get("/")
 def root():
     return {"message": "Wippy API - Gestor de campos"}
+
+@app.post("/simulate")
+def simulate_urea(payload: SimulationPayload):
+    asset = PhysicalAsset()
+    model = StandardUreaModel(asset)
+    engine = OptimizationEngine(model)
+    
+    df_sim = pd.DataFrame([{
+        "Temperature": payload.temperature,
+        "Humidity": payload.humidity,
+        "Wind_Speed": payload.wind_speed,
+        "Rainfall_mm": payload.rainfall
+    }])
+    
+    res = engine.get_viability_index(df_sim)
+    row = res.iloc[0]
+    
+    status_str = row["Status"]
+    viability_val = row["Viability_%"]
+    
+    optimality_class = "optimal"
+    if status_str.startswith("BLOCK:"):
+        optimality_class = "suboptimal"
+    elif viability_val < 50:
+        optimality_class = "suboptimal"
+    elif viability_val <= 75:
+        optimality_class = "moderate"
+    
+    return {
+        "viability": float(viability_val),
+        "status": str(status_str),
+        "optimality_class": optimality_class,
+        "volatilization_risk": float(row["Volatilization_Risk"]),
+        "leaching_risk": float(row["Leaching_Risk"])
+    }
 

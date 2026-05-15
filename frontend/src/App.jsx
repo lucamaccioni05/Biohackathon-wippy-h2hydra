@@ -3,6 +3,7 @@ import axios from 'axios'
 import FieldList from './components/FieldList'
 import FieldForm from './components/FieldForm'
 import Calendar from './components/Calendar'
+import Simulator from './components/Simulator'
 import './App.css'
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
   const [selectedField, setSelectedField] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editingField, setEditingField] = useState(null)
+  const [activeTab, setActiveTab] = useState('fields')
 
   useEffect(() => {
     fetchFields()
@@ -69,12 +71,32 @@ function App() {
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>Wippy - Gestor de Campos</h1>
-        <p>Gestiona tus campos y visualiza el calendario de optimalidad de aplicación de urea</p>
+        <div className="header-title">
+          <h1>Wippy - Gestor de Campos</h1>
+          <p>Gestiona tus campos y visualiza el calendario de optimalidad de aplicación de urea</p>
+        </div>
+        <div className="header-nav">
+          <button 
+            className={`nav-btn ${activeTab === 'fields' ? 'active' : ''}`}
+            onClick={() => setActiveTab('fields')}
+          >
+            Mis Campos
+          </button>
+          <button 
+            className={`nav-btn ${activeTab === 'simulator' ? 'active' : ''}`}
+            onClick={() => setActiveTab('simulator')}
+          >
+            Simulador
+          </button>
+        </div>
       </header>
 
       <div className="app-content">
-        <div className="left-panel">
+        {activeTab === 'simulator' ? (
+          <Simulator />
+        ) : (
+          <>
+            <div className="left-panel">
           <div className="panel-header">
             <h2>Mis Campos</h2>
             <button 
@@ -119,6 +141,8 @@ function App() {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
     </div>
   )
