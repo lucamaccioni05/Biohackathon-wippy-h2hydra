@@ -1,0 +1,88 @@
+.field-list {
+  width: 100%;
+}
+
+.empty-message {
+  text-align: center;
+  color: #999;
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+.fields-ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.field-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #f9f9f9;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.field-item:hover {
+  border-color: #667eea;
+  background: #f5f7ff;
+}
+
+.field-item.active {
+  border-color: #667eea;
+  background: #f0f4ff;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.field-info {
+  flex: 1;
+}
+
+.field-info h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #333;
+  margin-bottom: 0.3rem;
+}
+
+.field-location {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.field-meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: #6f6f6f;
+}
+
+.field-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-left: 0.75rem;
+}
+
+.btn-small {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 768px) {
+  .field-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .field-actions {
+    flex-direction: row;
+    margin-left: 0;
+  }
+}
