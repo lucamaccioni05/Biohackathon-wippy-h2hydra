@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import axios from 'axios'
 import FieldMapPicker from './FieldMapPicker'
 import './FieldForm.css'
 
@@ -12,14 +13,28 @@ const emptyFormState = {
   cropType: '',
   areaHectares: '',
   notes: '',
+  stationCode: '',
   latitude: null,
   longitude: null,
 }
 
 function FieldForm({ initialField = null, onSubmit, onCancel }) {
+  const [stationsList, setStationsList] = useState([])
   const [formData, setFormData] = useState({
     ...emptyFormState,
   })
+
+  useEffect(() => {
+    const fetchStations = async () => {
+      try {
+        const response = await axios.get('/api/stations')
+        setStationsList(response.data)
+      } catch (error) {
+        console.error('Error fetching stations:', error)
+      }
+    }
+    fetchStations()
+  }, [])
 
   useEffect(() => {
     if (!initialField) {
@@ -37,6 +52,7 @@ function FieldForm({ initialField = null, onSubmit, onCancel }) {
       cropType: initialField.crop_type || '',
       areaHectares: initialField.area_hectares ?? '',
       notes: initialField.notes || '',
+      stationCode: initialField.station_code || '',
       latitude: initialField.latitude ?? null,
       longitude: initialField.longitude ?? null,
     })
@@ -68,6 +84,7 @@ function FieldForm({ initialField = null, onSubmit, onCancel }) {
       crop_type: formData.cropType.trim() || null,
       area_hectares: formData.areaHectares ? Number(formData.areaHectares) : null,
       notes: formData.notes.trim() || null,
+      station_code: formData.stationCode ? Number(formData.stationCode) : null,
       latitude: formData.latitude,
       longitude: formData.longitude,
     })
@@ -214,6 +231,26 @@ function FieldForm({ initialField = null, onSubmit, onCancel }) {
           placeholder="Ej: acceso por ruta 9, zona con drenaje variable..."
           rows={3}
         />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="stationCode">Estación Meteorológica (BCCBA) más cercana</label>
+        <select
+          id="stationCode"
+          name="stationCode"
+          value={formData.stationCode}
+          onChange={handleChange}
+        >
+          <option value="">Seleccionar estación...</option>
+          {stationsList.map((station) => (
+            <option key={station.code} value={station.code}>
+              {station.title}
+            </option>
+          ))}
+        </select>
+        <p className="map-help" style={{ marginTop: '0.25rem' }}>
+          Usaremos esta estación para obtener datos actuales. El pronóstico de 7 días usará sus coordenadas.
+        </p>
       </div>
 
       <div className="form-group">
